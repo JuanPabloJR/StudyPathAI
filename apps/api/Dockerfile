@@ -27,4 +27,4 @@ COPY package.json ./
 EXPOSE 3001
 
 # Ejecutar migraciones y arrancar el servidor
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/main"]
