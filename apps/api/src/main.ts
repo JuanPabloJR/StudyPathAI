@@ -59,6 +59,10 @@ async function bootstrap() {
     console.log(`📚 Swagger disponible en: http://localhost:${process.env.PORT || 3001}/api/docs`);
   }
 
+  // ─── Health check público (Railway) ──────────────────────────────────────
+  const httpAdapter = app.getHttpAdapter();
+  httpAdapter.get('/health', (_req: any, res: any) => res.status(200).json({ status: 'ok' }));
+
   const port = process.env.PORT || 3001;
   await app.listen(port);
 
