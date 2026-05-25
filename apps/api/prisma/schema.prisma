@@ -1,0 +1,232 @@
+// StudyPath AI — Prisma Schema
+// Base de datos: PostgreSQL 16 + pgvector
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector")]
+}
+
+// ─── Enumeraciones ────────────────────────────────────────────────────────────
+
+enum KnowledgeLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+enum LearningFormat {
+  VIDEO
+  TEXT
+  INTERACTIVE
+  MIXED
+  PROJECT_BASED
+}
+
+enum PathStatus {
+  GENERATING
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum ResourceType {
+  VIDEO
+  ARTICLE
+  BOOK
+  COURSE
+  EXERCISE
+  DOCUMENTATION
+  TUTORIAL
+}
+
+enum ActivityType {
+  READING
+  PRACTICE
+  PROJECT
+  QUIZ
+  EXERCISE
+  DISCUSSION
+}
+
+// ─── Usuarios ─────────────────────────────────────────────────────────────────
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String
+  passwordHash String       @map("password_hash")
+  isVerified   Boolean      @default(false) @map("is_verified")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  profile       UserProfile?
+  learningPaths LearningPath[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model UserProfile {
+  id               String          @id @default(cuid())
+  userId           String          @unique @map("user_id")
+  bio              String?
+  occupation       String?
+  preferredFormats LearningFormat[] @map("preferred_formats")
+  learningStyle    String?         @map("learning_style")
+  weeklyHours      Int             @default(5) @map("weekly_hours")
+  avatarUrl        String?         @map("avatar_url")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+// ─── Rutas de Aprendizaje ─────────────────────────────────────────────────────
+
+model LearningPath {
+  id             String         @id @default(cuid())
+  userId         String         @map("user_id")
+  title          String
+  topic          String
+  level          KnowledgeLevel
+  objectives     String[]
+  timeAvailable  Int            @map("time_available")   // horas totales
+  format         LearningFormat
+  specialNeeds   String?        @map("special_needs")
+  status         PathStatus     @default(GENERATING)
+  totalModules   Int            @default(0) @map("total_modules")
+  estimatedHours Int            @default(0) @map("estimated_hours")
+  ragSources     Json?          @map("rag_sources")      // chunks usados
+  generationMeta Json?          @map("generation_meta")  // tokens, modelo, ms
+  version        Int            @default(1)              // incrementa al regenerar
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  modules Module[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("learning_paths")
+}
+
+model Module {
+  id            String  @id @default(cuid())
+  pathId        String  @map("path_id")
+  order         Int
+  title         String
+  objective     String
+  description   String
+  content       String  @db.Text
+  estimatedTime Int     @map("estimated_time") // minutos
+  tips          String[] // consejos del LLM
+
+  path       LearningPath @relation(fields: [pathId], references: [id], onDelete: Cascade)
+  resources  Resource[]
+  activities Activity[]
+  progress   ModuleProgress?
+
+  @@index([pathId])
+  @@map("modules")
+}
+
+model Resource {
+  id          String       @id @default(cuid())
+  moduleId    String       @map("module_id")
+  title       String
+  url         String?
+  type        ResourceType
+  description String?
+  author      String?
+  isFree      Boolean      @default(true) @map("is_free")
+  order       Int          @default(0)
+
+  module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@map("resources")
+}
+
+model Activity {
+  id          String       @id @default(cuid())
+  moduleId    String       @map("module_id")
+  title       String
+  description String       @db.Text
+  type        ActivityType
+  order       Int          @default(0)
+  durationMin Int          @default(30) @map("duration_min")
+
+  module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@map("activities")
+}
+
+model ModuleProgress {
+  id          String    @id @default(cuid())
+  moduleId    String    @unique @map("module_id")
+  completed   Boolean   @default(false)
+  completedAt DateTime? @map("completed_at")
+  score       Int?      // 0-100 si aplica evaluación
+  timeSpent   Int       @default(0) @map("time_spent") // minutos
+  notes       String?   @db.Text
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@map("module_progress")
+}
+
+// ─── Base de Conocimiento (RAG) ───────────────────────────────────────────────
+
+model KnowledgeChunk {
+  id         String                      @id @default(cuid())
+  sourceId   String                      @map("source_id")
+  content    String                      @db.Text
+  metadata   Json                        // { topic, level, format, source_url, author }
+  embedding  Unsupported("vector(768)")?  // pgvector — Gemini text-embedding-004 = 768 dims
+  createdAt  DateTime                    @default(now()) @map("created_at")
+
+  source KnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([sourceId])
+  @@map("knowledge_chunks")
+}
+
+model KnowledgeSource {
+  id          String   @id @default(cuid())
+  title       String
+  url         String?
+  author      String?
+  topic       String
+  subtopics   String[]
+  level       String   // BEGINNER | INTERMEDIATE | ADVANCED | ALL
+  format      String
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  chunks KnowledgeChunk[]
+
+  @@map("knowledge_sources")
+}

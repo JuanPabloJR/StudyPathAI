@@ -1,0 +1,41 @@
+# Dependencias
+node_modules/
+.pnp
+.pnp.js
+
+# Build
+dist/
+build/
+*.tsbuildinfo
+
+# Variables de entorno (NUNCA subir al repo)
+.env
+.env.local
+.env.*.local
+
+# Prisma (las migraciones SÍ se suben — Railway las necesita para prisma migrate deploy)
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Coverage
+coverage/
+
+# Docker
+.docker/
+
+# Temporal
+*.tmp
+*.temp
