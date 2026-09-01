@@ -4,7 +4,7 @@
  */
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://studypathai-production.up.railway.app/api';
 
 export const apiClient = axios.create({
   baseURL: BASE_URL,
@@ -30,11 +30,15 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError<any>) => {
-    // Token expirado → redirigir al login
+    // Token expirado → limpiar sesión y redirigir al login
     if (error.response?.status === 401) {
+      // Limpiar AMBAS claves: la manual y la que usa Zustand persist
       localStorage.removeItem('studypath_token');
-      localStorage.removeItem('studypath_user');
-      window.location.href = '/login';
+      localStorage.removeItem('studypath_auth'); // ← clave real del store de Zustand
+      // Solo redirigir si no estamos ya en login/register (evita loop)
+      if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   },

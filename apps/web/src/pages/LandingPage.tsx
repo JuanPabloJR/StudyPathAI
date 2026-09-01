@@ -54,9 +54,6 @@ export function LandingPage() {
 
       {/* ─── Hero ────────────────────────────────────────────────────────── */}
       <section className="max-w-6xl mx-auto px-6 py-24 text-center">
-        <div className="inline-flex items-center gap-2 bg-primary-900/30 border border-primary-800 rounded-full px-4 py-2 text-primary-300 text-sm font-medium mb-8">
-          <span>✨</span> Potenciado por Claude + RAG
-        </div>
 
         <h1 className="text-5xl md:text-6xl font-black text-slate-100 leading-tight mb-6">
           Tu ruta de aprendizaje,{' '}
@@ -83,7 +80,7 @@ export function LandingPage() {
         <div className="mt-16 grid grid-cols-3 gap-8 max-w-lg mx-auto text-center">
           {[
             { value: 'RAG', label: 'Retrieval-Augmented' },
-            { value: 'Claude', label: 'Modelo de lenguaje' },
+            { value: 'GROQ', label: 'Modelo de lenguaje' },
             { value: '∞', label: 'Temas disponibles' },
           ].map((stat) => (
             <div key={stat.label}>

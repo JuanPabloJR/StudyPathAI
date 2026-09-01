@@ -57,6 +57,7 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => {
         localStorage.removeItem('studypath_token');
+        localStorage.removeItem('studypath_auth'); // limpiar también la clave de Zustand persist
         set({ user: null, token: null, error: null });
       },
 
