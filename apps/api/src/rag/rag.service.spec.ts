@@ -237,6 +237,12 @@ describe('RagService', () => {
       expect(userPrompt).toContain('No se encontró contexto específico');
     });
 
+    it('debe lanzar BadGatewayException (no un 500) si la respuesta no trae módulos', async () => {
+      groqReturns({ title: 'Sin módulos', description: 'x', estimatedHours: 1 });
+      await expect(service.generateLearningPath(baseRequest))
+        .rejects.toThrow(BadGatewayException);
+    });
+
     it('debe lanzar BadGatewayException si Groq falla', async () => {
       mockGroqCreate.mockRejectedValueOnce(new Error('Quota exceeded'));
       await expect(service.generateLearningPath(baseRequest))

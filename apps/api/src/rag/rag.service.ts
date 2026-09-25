@@ -293,6 +293,10 @@ Genera la ruta de aprendizaje completa en español. Responde SOLO con el JSON.`;
 
       parsed = JSON.parse(rawText);
 
+      if (!Array.isArray(parsed?.modules) || parsed.modules.length === 0) {
+        throw new Error('la respuesta del modelo no incluye módulos');
+      }
+
     } catch (err: any) {
       this.logger.error('Error Groq:', err?.message ?? err);
       throw new BadGatewayException(

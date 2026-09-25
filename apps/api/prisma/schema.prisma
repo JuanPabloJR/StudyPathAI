@@ -33,7 +33,8 @@ enum PathStatus {
   GENERATING
   ACTIVE
   COMPLETED
-  ARCHIVED
+  ARCHIVED // versión reemplazada al regenerar
+  FAILED   // la generación con el LLM falló
 }
 
 enum ResourceType {

@@ -158,4 +158,53 @@ describe('LearningPathsService', () => {
       expect(stats.activePaths).toBe(2);
     });
   });
+
+  describe('create', () => {
+    it('debe marcar la ruta como FAILED y relanzar el error si falla la generación', async () => {
+      const error = new Error('Groq caído');
+      mockRag.generateLearningPath.mockRejectedValueOnce(error);
+
+      await expect(service.create(MOCK_USER_ID, {
+        topic: 'Python', level: 'BEGINNER', objectives: ['Aprender variables'],
+        timeAvailable: 10, format: 'MIXED',
+      } as any)).rejects.toBe(error);
+
+      expect(mockPrisma.learningPath.update).toHaveBeenCalledWith({
+        where: { id: MOCK_PATH_ID },
+        data: { status: 'FAILED' },
+      });
+    });
+  });
+
+  describe('regenerate', () => {
+    const NEW_PATH_ID = 'path-002';
+
+    it('debe archivar la ruta anterior solo después de generar la nueva', async () => {
+      mockPrisma.learningPath.create.mockResolvedValueOnce({ ...mockPath, id: NEW_PATH_ID });
+
+      await service.regenerate(MOCK_PATH_ID, MOCK_USER_ID);
+
+      const updates = mockPrisma.learningPath.update.mock.calls.map((c: any) => c[0]);
+      expect(updates[updates.length - 1]).toEqual({
+        where: { id: MOCK_PATH_ID },
+        data: { status: 'ARCHIVED' },
+      });
+      expect(mockRag.generateLearningPath).toHaveBeenCalledTimes(1);
+    });
+
+    it('no debe archivar la ruta anterior si la generación falla', async () => {
+      mockPrisma.learningPath.create.mockResolvedValueOnce({ ...mockPath, id: NEW_PATH_ID });
+      mockRag.generateLearningPath.mockRejectedValueOnce(new Error('Groq caído'));
+
+      await expect(service.regenerate(MOCK_PATH_ID, MOCK_USER_ID)).rejects.toThrow('Groq caído');
+
+      expect(mockPrisma.learningPath.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: MOCK_PATH_ID } }),
+      );
+      expect(mockPrisma.learningPath.update).toHaveBeenCalledWith({
+        where: { id: NEW_PATH_ID },
+        data: { status: 'FAILED' },
+      });
+    });
+  });
 });

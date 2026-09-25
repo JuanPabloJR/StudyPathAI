@@ -20,6 +20,7 @@ import {
   ApiParam,
   ApiQuery,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { LearningPathsService } from './learning-paths.service';
 import { CreateLearningPathDto } from './dto/create-learning-path.dto';
@@ -37,12 +38,14 @@ export class LearningPathsController {
    * Genera una nueva ruta de aprendizaje con RAG + Claude
    */
   @Post()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } }) // cada llamada consume cuota del LLM
   @ApiOperation({
     summary: 'Generar ruta de aprendizaje',
     description: 'Crea una nueva ruta personalizada usando RAG y LLM. Puede tomar 10-30 segundos.',
   })
   @ApiResponse({ status: 201, description: 'Ruta generada exitosamente' })
   @ApiResponse({ status: 502, description: 'Error al contactar la API de IA' })
+  @ApiResponse({ status: 429, description: 'Demasiadas solicitudes (máx. 5 por minuto)' })
   async create(@Request() req: any, @Body() dto: CreateLearningPathDto) {
     return this.service.create(req.user.id, dto);
   }
@@ -101,6 +104,7 @@ export class LearningPathsController {
    * Regenerar la ruta con ajustes opcionales
    */
   @Post(':id/regenerate')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } }) // cada llamada consume cuota del LLM
   @ApiOperation({ summary: 'Regenerar ruta con ajustes' })
   @ApiParam({ name: 'id', description: 'ID de la ruta a regenerar' })
   async regenerate(

@@ -117,10 +117,10 @@ export class LearningPathsService {
       this.logger.log(`✅ Ruta ${path.id} generada con ${generated.modules.length} módulos`);
       return this.findOne(path.id, userId);
     } catch (error) {
-      // Si falla la generación, marcar como error
+      // Si falla la generación, marcar como fallida
       await this.prisma.learningPath.update({
         where: { id: path.id },
-        data: { status: 'ARCHIVED' },
+        data: { status: 'FAILED' },
       });
       throw error;
     }
@@ -286,14 +286,9 @@ export class LearningPathsService {
       throw new NotFoundException('Ruta no encontrada');
     }
 
-    // Archivar la ruta actual
-    await this.prisma.learningPath.update({
-      where: { id: pathId },
-      data: { status: 'ARCHIVED' },
-    });
-
-    // Crear nueva ruta con los mismos parámetros + ajustes
-    return this.create(userId, {
+    // Crear nueva ruta con los mismos parámetros + ajustes.
+    // Si la generación falla, create() lanza y la ruta actual queda intacta.
+    const newPath = await this.create(userId, {
       topic: path.topic,
       level: path.level as any,
       objectives: path.objectives,
@@ -303,6 +298,14 @@ export class LearningPathsService {
         ? `${path.specialNeeds || ''}. Ajuste solicitado: ${adjustments}`
         : path.specialNeeds ?? undefined,
     });
+
+    // Solo con la nueva ruta guardada se archiva la anterior
+    await this.prisma.learningPath.update({
+      where: { id: pathId },
+      data: { status: 'ARCHIVED' },
+    });
+
+    return newPath;
   }
 
   // ─── Eliminar una ruta ────────────────────────────────────────────────────────
