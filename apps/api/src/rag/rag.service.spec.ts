@@ -1,5 +1,5 @@
 /**
- * Tests unitarios — RagService con Gemini 2.0 Flash
+ * Tests unitarios — RagService (embeddings Gemini + generación con Groq)
  * Ejecutar: npm run test
  */
 import { Test, TestingModule } from '@nestjs/testing';
@@ -59,50 +59,49 @@ const mockGeneratedPath = {
   ],
 };
 
-// Mock de GoogleGenerativeAI
-const mockEmbedContent   = jest.fn().mockResolvedValue({ embedding: { values: new Array(768).fill(0.1) } });
-const mockGenerateContent = jest.fn().mockResolvedValue({
-  response: { text: () => JSON.stringify(mockGeneratedPath) },
-});
-const mockGetGenerativeModel = jest.fn().mockImplementation(({ model }: { model: string }) => ({
-  embedContent:    mockEmbedContent,
-  generateContent: mockGenerateContent,
+// Groq: `import Groq from 'groq-sdk'` compila a `groq_sdk_1.default`
+const mockGroqCreate = jest.fn();
+jest.mock('groq-sdk', () => ({
+  __esModule: true,
+  default: jest.fn().mockImplementation(() => ({
+    chat: { completions: { create: mockGroqCreate } },
+  })),
 }));
 
-jest.mock('@google/generative-ai', () => ({
-  GoogleGenerativeAI: jest.fn().mockImplementation(() => ({
-    getGenerativeModel: mockGetGenerativeModel,
-  })),
-  SchemaType: {
-    OBJECT: 'object', ARRAY: 'array', STRING: 'string',
-    INTEGER: 'integer', BOOLEAN: 'boolean', NUMBER: 'number',
-  },
-  HarmCategory: {
-    HARM_CATEGORY_HARASSMENT:        'HARM_CATEGORY_HARASSMENT',
-    HARM_CATEGORY_HATE_SPEECH:       'HARM_CATEGORY_HATE_SPEECH',
-    HARM_CATEGORY_SEXUALLY_EXPLICIT: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
-    HARM_CATEGORY_DANGEROUS_CONTENT: 'HARM_CATEGORY_DANGEROUS_CONTENT',
-  },
-  HarmBlockThreshold: { BLOCK_ONLY_HIGH: 'BLOCK_ONLY_HIGH' },
-}));
+const groqReturns = (body: unknown) =>
+  mockGroqCreate.mockResolvedValue({
+    choices: [{ message: { content: JSON.stringify(body) } }],
+  });
+
+// Gemini embeddings vía fetch
+const mockFetch = jest.fn();
+global.fetch = mockFetch as any;
+
+const embeddingResponse = (values: number[]) => ({
+  ok: true,
+  status: 200,
+  json: () => Promise.resolve({ embedding: { values } }),
+  text: () => Promise.resolve(''),
+});
 
 const mockPrisma = {
-  $queryRaw: jest.fn().mockResolvedValue(mockChunks),
-  knowledgeChunk: { findMany: jest.fn().mockResolvedValue([]) },
+  $queryRaw: jest.fn(),
 };
 
-const mockConfig = {
-  get: jest.fn((key: string) => ({
-    GOOGLE_AI_API_KEY:    'test-key-AIzaSy',
-    GEMINI_MODEL:         'gemini-2.0-flash',
-    EMBEDDING_MODEL:      'text-embedding-004',
-    EMBEDDING_DIMENSIONS: '768',
-  }[key])),
+const configValues: Record<string, string | undefined> = {};
+const mockConfig = { get: jest.fn((key: string) => configValues[key]) };
+
+const baseConfig = {
+  GROQ_API_KEY:       'test-groq-key',
+  GROQ_MODEL:         'llama-3.3-70b-versatile',
+  GOOGLE_AI_API_KEY:  'test-google-key',
+  EMBEDDING_MODEL:    'gemini-embedding-001',
+  RAG_MIN_SIMILARITY: '0.6',
 };
 
 // ─── Suite de tests ───────────────────────────────────────────────────────────
 
-describe('RagService — Gemini 2.0 Flash', () => {
+describe('RagService', () => {
   let service: RagService;
 
   const baseRequest: LearningPathRequest = {
@@ -115,32 +114,63 @@ describe('RagService — Gemini 2.0 Flash', () => {
   };
 
   beforeEach(async () => {
+    jest.clearAllMocks();
+    for (const k of Object.keys(configValues)) delete configValues[k];
+    Object.assign(configValues, baseConfig);
+
+    mockFetch.mockResolvedValue(embeddingResponse(new Array(768).fill(0.1)));
+    mockPrisma.$queryRaw.mockResolvedValue(mockChunks);
+    groqReturns(mockGeneratedPath);
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RagService,
         { provide: PrismaService, useValue: mockPrisma },
-        { provide: ConfigService,  useValue: mockConfig },
+        { provide: ConfigService, useValue: mockConfig },
       ],
     }).compile();
 
     service = module.get<RagService>(RagService);
-    jest.clearAllMocks();
   });
 
   // ── embedQuery ─────────────────────────────────────────────────────────────
 
   describe('embedQuery', () => {
-    it('debe retornar un vector de 768 dimensiones', async () => {
-      mockEmbedContent.mockResolvedValueOnce({ embedding: { values: new Array(768).fill(0.1) } });
+    it('debe retornar un vector de 768 dimensiones desde Gemini', async () => {
       const emb = await service.embedQuery('Python ciencia de datos');
       expect(emb).toHaveLength(768);
     });
 
-    it('debe retornar vector cero como fallback si falla la API', async () => {
-      mockEmbedContent.mockRejectedValueOnce(new Error('API error'));
-      const emb = await service.embedQuery('test');
-      expect(emb).toHaveLength(768);
-      expect(emb.every(v => v === 0)).toBe(true);
+    it('debe pedir el embedding como consulta, con el modelo configurado y 768 dimensiones', async () => {
+      await service.embedQuery('Python ciencia de datos');
+
+      const [url, init] = mockFetch.mock.calls[0];
+      const body = JSON.parse(init.body);
+      expect(url).toContain('gemini-embedding-001:embedContent');
+      expect(init.headers['x-goog-api-key']).toBe('test-google-key');
+      expect(body.taskType).toBe('RETRIEVAL_QUERY');
+      expect(body.outputDimensionality).toBe(768);
+    });
+
+    it('debe retornar null (no un vector cero) si la API falla', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({}),
+        text: () => Promise.resolve('API key not valid'),
+      });
+      expect(await service.embedQuery('test')).toBeNull();
+    });
+
+    it('debe retornar null si la API devuelve un vector cero', async () => {
+      mockFetch.mockResolvedValueOnce(embeddingResponse(new Array(768).fill(0)));
+      expect(await service.embedQuery('test')).toBeNull();
+    });
+
+    it('debe retornar null sin llamar a la API si falta GOOGLE_AI_API_KEY', async () => {
+      delete configValues.GOOGLE_AI_API_KEY;
+      expect(await service.embedQuery('test')).toBeNull();
+      expect(mockFetch).not.toHaveBeenCalled();
     });
   });
 
@@ -148,20 +178,26 @@ describe('RagService — Gemini 2.0 Flash', () => {
 
   describe('retrieveRelevantChunks', () => {
     it('debe retornar chunks con similitud desde pgvector', async () => {
-      mockPrisma.$queryRaw.mockResolvedValueOnce(mockChunks);
-      const result = await service.retrieveRelevantChunks(new Array(768).fill(0), 'python', 5);
+      const result = await service.retrieveRelevantChunks(new Array(768).fill(0.1), 5);
       expect(result).toHaveLength(2);
       expect(result[0].similarity).toBe(0.92);
     });
 
-    it('debe usar fallback si pgvector no está disponible', async () => {
+    it('debe excluir vectores cero y aplicar el umbral de similitud', async () => {
+      await service.retrieveRelevantChunks(new Array(768).fill(0.1), 5);
+
+      const [strings, ...values] = mockPrisma.$queryRaw.mock.calls[0];
+      const sql = (strings as string[]).join('?');
+      expect(sql).toContain('vector_norm(kc.embedding) > 0');
+      expect(sql).not.toContain('OR kc.embedding IS NOT NULL');
+      expect(values).toContain(0.6);
+      expect(values).toContain(5);
+    });
+
+    it('debe retornar lista vacía (no chunks arbitrarios) si falla la consulta', async () => {
       mockPrisma.$queryRaw.mockRejectedValueOnce(new Error('pgvector unavailable'));
-      mockPrisma.knowledgeChunk.findMany.mockResolvedValueOnce([
-        { id: '1', content: 'Contenido fallback', metadata: {}, source: {} },
-      ]);
-      const result = await service.retrieveRelevantChunks(new Array(768).fill(0), 'python', 5);
-      expect(result).toHaveLength(1);
-      expect(result[0].similarity).toBe(0.5);
+      const result = await service.retrieveRelevantChunks(new Array(768).fill(0.1), 5);
+      expect(result).toEqual([]);
     });
   });
 
@@ -169,12 +205,6 @@ describe('RagService — Gemini 2.0 Flash', () => {
 
   describe('generateLearningPath', () => {
     it('debe generar una ruta completa con los campos requeridos', async () => {
-      mockPrisma.$queryRaw.mockResolvedValue(mockChunks);
-      mockGetGenerativeModel.mockImplementation(() => ({
-        embedContent:    () => Promise.resolve({ embedding: { values: new Array(768).fill(0.1) } }),
-        generateContent: () => Promise.resolve({ response: { text: () => JSON.stringify(mockGeneratedPath) } }),
-      }));
-
       const result = await service.generateLearningPath(baseRequest);
 
       expect(result.title).toBe('Python para Data Science: De Cero a Analista');
@@ -182,63 +212,47 @@ describe('RagService — Gemini 2.0 Flash', () => {
       expect(result.modules[0].resources).toHaveLength(1);
       expect(result.modules[0].activities).toHaveLength(1);
       expect(result.ragSources).toHaveLength(2);
-      expect(result.generationMeta.model).toBe('gemini-2.0-flash');
+      expect(result.generationMeta.model).toBe('llama-3.3-70b-versatile');
       expect(result.generationMeta.chunksRetrieved).toBe(2);
-      expect(result.generationMeta.generationMs).toBeGreaterThan(0);
     });
 
-    it('debe usar gemini-2.0-flash como modelo', async () => {
-      mockPrisma.$queryRaw.mockResolvedValue(mockChunks);
-      let capturedModel = '';
-      mockGetGenerativeModel.mockImplementation(({ model }: any) => {
-        capturedModel = model;
-        return {
-          embedContent:    () => Promise.resolve({ embedding: { values: new Array(768).fill(0.1) } }),
-          generateContent: () => Promise.resolve({ response: { text: () => JSON.stringify(mockGeneratedPath) } }),
-        };
-      });
-
+    it('debe enviar el contexto recuperado a Groq', async () => {
       await service.generateLearningPath(baseRequest);
-      expect(capturedModel).toBe('gemini-2.0-flash');
+
+      const { messages } = mockGroqCreate.mock.calls[0][0];
+      const userPrompt = messages.find((m: any) => m.role === 'user').content;
+      expect(userPrompt).toContain('Python para Data Science');
+      expect(userPrompt).toContain('NumPy y Pandas');
     });
 
-    it('debe lanzar BadGatewayException si la API de Gemini falla', async () => {
-      mockPrisma.$queryRaw.mockResolvedValue(mockChunks);
-      mockGetGenerativeModel.mockImplementation(() => ({
-        embedContent:    () => Promise.resolve({ embedding: { values: new Array(768).fill(0) } }),
-        generateContent: () => Promise.reject(new Error('Quota exceeded')),
-      }));
+    it('debe generar sin contexto y sin consultar pgvector si no hay embedding', async () => {
+      delete configValues.GOOGLE_AI_API_KEY;
 
+      const result = await service.generateLearningPath(baseRequest);
+
+      expect(mockPrisma.$queryRaw).not.toHaveBeenCalled();
+      expect(result.ragSources).toEqual([]);
+      expect(result.generationMeta.chunksRetrieved).toBe(0);
+      const userPrompt = mockGroqCreate.mock.calls[0][0].messages[1].content;
+      expect(userPrompt).toContain('No se encontró contexto específico');
+    });
+
+    it('debe lanzar BadGatewayException si Groq falla', async () => {
+      mockGroqCreate.mockRejectedValueOnce(new Error('Quota exceeded'));
       await expect(service.generateLearningPath(baseRequest))
         .rejects.toThrow(BadGatewayException);
     });
 
-    it('debe incluir el tema y nombre del usuario en el prompt enviado a Flash', async () => {
-      let capturedPrompt = '';
-      mockPrisma.$queryRaw.mockResolvedValue(mockChunks);
-      mockGetGenerativeModel.mockImplementation(() => ({
-        embedContent: () => Promise.resolve({ embedding: { values: new Array(768).fill(0.1) } }),
-        generateContent: (prompt: string) => {
-          capturedPrompt = typeof prompt === 'string' ? prompt : JSON.stringify(prompt);
-          return Promise.resolve({ response: { text: () => JSON.stringify(mockGeneratedPath) } });
-        },
-      }));
-
-      await service.generateLearningPath({ ...baseRequest, userName: 'María' });
-      expect(capturedPrompt).toContain('Python para Data Science');
-    });
-
     it('debe calcular el número correcto de módulos según el tiempo disponible', () => {
-      // Acceder al método privado vía any
       const prompt = (service as any).buildUserPrompt(
         { ...baseRequest, timeAvailable: 9 },
         mockChunks,
       );
       // 9h / 3 = 3 módulos
-      expect(prompt).toContain('3 módulos');
+      expect(prompt).toContain('Número de módulos: 3');
     });
 
-    it('debe incluir el contexto recuperado en el prompt', async () => {
+    it('debe incluir el contexto recuperado en el prompt', () => {
       const prompt = (service as any).buildUserPrompt(baseRequest, mockChunks);
       expect(prompt).toContain('Python es un lenguaje');
       expect(prompt).toContain('NumPy y Pandas');
@@ -250,7 +264,7 @@ describe('RagService — Gemini 2.0 Flash', () => {
 
   describe('normalización de campos opcionales', () => {
     it('debe asignar defaults a campos opcionales faltantes', async () => {
-      const pathWithDefaults = {
+      groqReturns({
         ...mockGeneratedPath,
         modules: [{
           order: 1,
@@ -261,13 +275,7 @@ describe('RagService — Gemini 2.0 Flash', () => {
           estimatedTime: 60,
           // tips, resources, activities no incluidos
         }],
-      };
-
-      mockPrisma.$queryRaw.mockResolvedValue(mockChunks);
-      mockGetGenerativeModel.mockImplementation(() => ({
-        embedContent:    () => Promise.resolve({ embedding: { values: new Array(768).fill(0.1) } }),
-        generateContent: () => Promise.resolve({ response: { text: () => JSON.stringify(pathWithDefaults) } }),
-      }));
+      });
 
       const result = await service.generateLearningPath(baseRequest);
       expect(result.modules[0].tips).toEqual([]);

@@ -24,7 +24,7 @@ El usuario ingresa su tema, nivel, objetivos y tiempo disponible; el sistema rec
 | ORM | Prisma 5 |
 | Base de datos | PostgreSQL 16 + pgvector |
 | LLM | GROQ llama-3.3-70b-versatile |
-| Embeddings | Google Gemini text-embedding-004 (768d, solo seed) |
+| Embeddings | Google Gemini gemini-embedding-001 (768d, seed + consultas) |
 | Auth | JWT + bcrypt |
 | Contenedores | Docker + Docker Compose |
 
@@ -124,11 +124,11 @@ docker compose up -d   # Levanta postgres + api + web
 ```
 1. Usuario envía: { topic, level, objectives, timeAvailable, format }
         ↓
-2. Backend genera embedding de la consulta
-   (vector-cero como fallback — GROQ no tiene API de embeddings)
+2. Backend genera embedding de la consulta con Gemini (gemini-embedding-001, 768d)
+   (sin embedding disponible → se genera sin contexto recuperado)
         ↓
 3. pgvector busca los 8 chunks más similares en knowledge_chunks
-   usando similitud coseno: embedding <=> query_vector
+   usando similitud coseno (embedding <=> query_vector), con umbral RAG_MIN_SIMILARITY
         ↓
 4. Se construye el prompt:
    - System: instrucciones de experto educativo + formato JSON

@@ -3,7 +3,8 @@
  *
  * Flujo:
  *  1. Perfil del usuario → texto de consulta
- *  2. Embedding → pgvector cosine search → top-K chunks  (zero-vector fallback)
+ *  2. Embedding (Gemini) → pgvector cosine search → top-K chunks sobre umbral
+ *     (sin embedding disponible → se genera sin contexto recuperado)
  *  3. Prompt con contexto recuperado → Groq Llama 3.3 70B
  *  4. JSON estructurado via response_format json_object
  *  5. Normalizar y guardar en BD
@@ -12,6 +13,7 @@ import { Injectable, Logger, BadGatewayException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Groq from 'groq-sdk';
 import { PrismaService } from '../prisma/prisma.service';
+import { embedText } from './embeddings';
 
 // ─── Tipos de la aplicación ───────────────────────────────────────────────────
 
@@ -82,14 +84,31 @@ export class RagService {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // PASO 1 — Embedding (zero-vector fallback — base de conocimiento vacía)
+  // PASO 1 — Embedding de la consulta (Gemini, mismo modelo que el seed)
   // ══════════════════════════════════════════════════════════════════════════
 
-  async embedQuery(_text: string): Promise<number[]> {
-    // Groq no provee API de embeddings.
-    // Con la base de conocimiento vacía el RAG igual funciona:
-    // el LLM genera rutas de su propio conocimiento.
-    return new Array(768).fill(0);
+  /**
+   * Devuelve null si no hay GOOGLE_AI_API_KEY o la API falla.
+   * En ese caso no se recupera contexto: un vector cero haría que pgvector
+   * devuelva similitud NaN y chunks en orden arbitrario.
+   */
+  async embedQuery(text: string): Promise<number[] | null> {
+    const apiKey = this.config.get<string>('GOOGLE_AI_API_KEY');
+    if (!apiKey) {
+      this.logger.warn('GOOGLE_AI_API_KEY no configurada: se genera sin contexto RAG');
+      return null;
+    }
+
+    try {
+      return await embedText(text, {
+        apiKey,
+        model:    this.config.get<string>('EMBEDDING_MODEL'),
+        taskType: 'RETRIEVAL_QUERY',
+      });
+    } catch (err: any) {
+      this.logger.error(`Error generando embedding de la consulta: ${err?.message ?? err}`);
+      return null;
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -98,13 +117,15 @@ export class RagService {
 
   async retrieveRelevantChunks(
     queryEmbedding: number[],
-    topic: string,
     topK = 8,
   ): Promise<{ content: string; similarity: number; metadata: any }[]> {
-    const vec = `[${queryEmbedding.join(',')}]`;
+    const vec           = `[${queryEmbedding.join(',')}]`;
+    const minSimilarity = Number(this.config.get<string>('RAG_MIN_SIMILARITY') ?? 0.6);
 
     try {
-      const rows = await this.prisma.$queryRaw<
+      // Excluye chunks sin embedding o con vector cero (seeds viejos en "demo mode")
+      // y los que no superan el umbral, para no inyectar contexto irrelevante.
+      return await this.prisma.$queryRaw<
         { content: string; similarity: number; metadata: any }[]
       >`
         SELECT
@@ -114,33 +135,15 @@ export class RagService {
         FROM knowledge_chunks  kc
         JOIN knowledge_sources ks ON kc.source_id = ks.id
         WHERE ks.is_active = true
-          AND (
-            LOWER(ks.topic) LIKE LOWER(${`%${topic}%`})
-            OR kc.metadata->>'topic' ILIKE ${`%${topic}%`}
-            OR kc.embedding IS NOT NULL
-          )
+          AND kc.embedding IS NOT NULL
+          AND vector_norm(kc.embedding) > 0
+          AND 1 - (kc.embedding <=> ${vec}::vector) >= ${minSimilarity}
         ORDER BY kc.embedding <=> ${vec}::vector
         LIMIT ${topK}
       `;
-
-      if (rows.length > 0) return rows;
-
-      return this.prisma.$queryRaw`
-        SELECT
-          kc.content,
-          1 - (kc.embedding <=> ${vec}::vector) AS similarity,
-          kc.metadata
-        FROM knowledge_chunks kc
-        WHERE kc.embedding IS NOT NULL
-        ORDER BY kc.embedding <=> ${vec}::vector
-        LIMIT ${topK}
-      `;
-    } catch {
-      const chunks = await this.prisma.knowledgeChunk.findMany({
-        take: topK,
-        include: { source: true },
-      });
-      return chunks.map(c => ({ content: c.content, similarity: 0.5, metadata: c.metadata }));
+    } catch (err: any) {
+      this.logger.error(`Error en búsqueda vectorial: ${err?.message ?? err}`);
+      return [];
     }
   }
 
@@ -258,12 +261,12 @@ Genera la ruta de aprendizaje completa en español. Responde SOLO con el JSON.`;
     const model = this.config.get<string>('GROQ_MODEL') || 'llama-3.3-70b-versatile';
     this.logger.log(`🚀 [Groq/${model}] Generando ruta: "${req.topic}" · ${req.level}`);
 
-    // 1. Embedding (zero-vector fallback)
+    // 1. Embedding de la consulta
     const queryText = `${req.topic} ${req.level} ${req.objectives.join(' ')}`;
     const embedding = await this.embedQuery(queryText);
 
-    // 2. Recuperación
-    const chunks = await this.retrieveRelevantChunks(embedding, req.topic);
+    // 2. Recuperación (sin embedding no hay búsqueda vectorial posible)
+    const chunks = embedding ? await this.retrieveRelevantChunks(embedding) : [];
     this.logger.log(`📚 Chunks recuperados: ${chunks.length}`);
 
     // 3. Prompt
@@ -346,6 +349,6 @@ Genera la ruta de aprendizaje completa en español. Responde SOLO con el JSON.`;
 
   async searchKnowledge(query: string, topK = 5) {
     const emb = await this.embedQuery(query);
-    return this.retrieveRelevantChunks(emb, query, topK);
+    return emb ? this.retrieveRelevantChunks(emb, topK) : [];
   }
 }

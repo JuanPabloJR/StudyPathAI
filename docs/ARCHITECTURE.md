@@ -113,9 +113,11 @@ User ──── UserProfile
 
 2. RagService.generatePath():
    a. Construir query de búsqueda: "<topic> <level> <objectives>"
-   b. Embeddings: vector-cero float[768] (fallback — GROQ no tiene API de embeddings)
-      * Los chunks en DB fueron embebidos con Google Gemini text-embedding-004 (solo en seed)
-   c. pgvector similarity search: SELECT chunks ORDER BY embedding <=> $1 LIMIT 10
+   b. Embedding de la consulta: Gemini gemini-embedding-001, float[768], taskType RETRIEVAL_QUERY
+      * Los chunks se embeben con el mismo modelo en el seed (RETRIEVAL_DOCUMENT)
+      * Sin embedding disponible → no hay búsqueda y se genera sin contexto
+   c. pgvector similarity search: chunks con similitud >= RAG_MIN_SIMILARITY,
+      ORDER BY embedding <=> $1 LIMIT 8
    d. Construir prompt con:
       - System: rol de experto educativo + instrucciones de formato JSON
       - User: perfil del estudiante + contexto recuperado
@@ -142,7 +144,7 @@ User ──── UserProfile
 | Base de datos | PostgreSQL + pgvector | 16.x |
 | Auth | JWT + bcrypt | — |
 | LLM | GROQ llama-3.3-70b-versatile | — |
-| Embeddings | Google Gemini text-embedding-004 (768d, solo seed) | — |
+| Embeddings | Google Gemini gemini-embedding-001 (768d, seed + consultas) | — |
 | Contenedor | Docker + Docker Compose | — |
 
 ---
@@ -157,7 +159,7 @@ User ──── UserProfile
 - [ ] Endpoints básicos de usuarios
 
 ### Etapa 2 — Pipeline RAG (Semana 3-4)
-- [ ] Integración Google Gemini Embeddings (text-embedding-004, seed)
+- [ ] Integración Google Gemini Embeddings (gemini-embedding-001, seed + consultas)
 - [ ] Población de knowledge base (seed)
 - [ ] pgvector similarity search
 - [ ] Integración Claude API
