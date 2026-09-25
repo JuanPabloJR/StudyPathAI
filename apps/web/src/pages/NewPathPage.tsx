@@ -2,23 +2,27 @@ import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { usePathsStore } from '../store/paths.store';
+import {
+  PlayCircleIcon, DocumentTextIcon, CursorArrowRaysIcon, Squares2X2Icon, WrenchScrewdriverIcon,
+  PlusIcon, XMarkIcon, SparklesIcon,
+} from '@heroicons/react/24/outline';
 import type { KnowledgeLevel, LearningFormat } from '../types';
 
 // ─── Opciones de los selectores ──────────────────────────────────────────────
 
 const LEVELS: { value: KnowledgeLevel; label: string; desc: string }[] = [
-  { value: 'BEGINNER',     label: '🌱 Principiante', desc: 'Sin conocimiento previo del tema' },
-  { value: 'INTERMEDIATE', label: '📗 Intermedio',   desc: 'Tengo bases y quiero profundizar' },
-  { value: 'ADVANCED',     label: '🔷 Avanzado',     desc: 'Domino el tema, busco expertise' },
-  { value: 'EXPERT',       label: '⭐ Experto',      desc: 'Busco conocimientos especializados' },
+  { value: 'BEGINNER',     label: 'Principiante', desc: 'Sin conocimiento previo del tema' },
+  { value: 'INTERMEDIATE', label: 'Intermedio',   desc: 'Tengo bases y quiero profundizar' },
+  { value: 'ADVANCED',     label: 'Avanzado',     desc: 'Domino el tema, busco expertise' },
+  { value: 'EXPERT',       label: 'Experto',      desc: 'Busco conocimientos especializados' },
 ];
 
-const FORMATS: { value: LearningFormat; label: string; icon: string }[] = [
-  { value: 'VIDEO',         label: 'Videos',     icon: '🎬' },
-  { value: 'TEXT',          label: 'Lectura',    icon: '📖' },
-  { value: 'INTERACTIVE',   label: 'Interactivo',icon: '🖱️' },
-  { value: 'MIXED',         label: 'Mixto',      icon: '🎯' },
-  { value: 'PROJECT_BASED', label: 'Proyectos',  icon: '🏗️' },
+const FORMATS: { value: LearningFormat; label: string; icon: typeof PlayCircleIcon }[] = [
+  { value: 'VIDEO',         label: 'Videos',     icon: PlayCircleIcon },
+  { value: 'TEXT',          label: 'Lectura',    icon: DocumentTextIcon },
+  { value: 'INTERACTIVE',   label: 'Interactivo',icon: CursorArrowRaysIcon },
+  { value: 'MIXED',         label: 'Mixto',      icon: Squares2X2Icon },
+  { value: 'PROJECT_BASED', label: 'Proyectos',  icon: WrenchScrewdriverIcon },
 ];
 
 // ─── Componente ───────────────────────────────────────────────────────────────
@@ -53,7 +57,7 @@ export function NewPathPage() {
     if (objectives.length === 0) { toast.error('Agrega al menos un objetivo'); return; }
 
     try {
-      const toastId = toast.loading('🤖 Generando tu ruta con IA... (puede tardar 15-30s)');
+      const toastId = toast.loading('Generando tu ruta con IA... (puede tardar 15-30s)');
       const path = await createPath({
         topic: topic.trim(),
         level,
@@ -73,14 +77,14 @@ export function NewPathPage() {
   return (
     <div className="max-w-2xl mx-auto animate-fade-in">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-100">✨ Nueva Ruta de Aprendizaje</h1>
-        <p className="text-slate-400 mt-2">
+        <h1 className="text-3xl font-bold text-ink">Nueva Ruta de Aprendizaje</h1>
+        <p className="text-body mt-2">
           Completa tu perfil de aprendizaje y la IA generará un plan personalizado.
         </p>
       </div>
 
       {error && (
-        <div className="bg-red-900/30 border border-red-800 text-red-300 rounded-xl p-4 mb-6 text-sm">
+        <div className="alert-error mb-6">
           {error}
         </div>
       )}
@@ -88,7 +92,7 @@ export function NewPathPage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* ── Tema ── */}
         <div className="card">
-          <h2 className="font-semibold text-slate-100 mb-4">🎯 Tema de estudio</h2>
+          <h2 className="font-semibold text-ink mb-4">Tema de estudio</h2>
           <input
             type="text"
             value={topic}
@@ -101,17 +105,17 @@ export function NewPathPage() {
 
         {/* ── Nivel ── */}
         <div className="card">
-          <h2 className="font-semibold text-slate-100 mb-4">📊 Nivel de conocimiento actual</h2>
+          <h2 className="font-semibold text-ink mb-4">Nivel de conocimiento actual</h2>
           <div className="grid grid-cols-2 gap-3">
             {LEVELS.map(l => (
               <button
                 key={l.value}
                 type="button"
                 onClick={() => setLevel(l.value)}
-                className={`p-4 rounded-xl border text-left transition-all ${
+                className={`choice ${
                   level === l.value
-                    ? 'border-primary-500 bg-primary-900/30 text-primary-300'
-                    : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600'
+                    ? 'choice-active'
+                    : ''
                 }`}
               >
                 <div className="font-medium text-sm">{l.label}</div>
@@ -123,23 +127,23 @@ export function NewPathPage() {
 
         {/* ── Objetivos ── */}
         <div className="card">
-          <h2 className="font-semibold text-slate-100 mb-4">
-            🎯 Objetivos de aprendizaje
-            <span className="text-slate-500 font-normal text-sm ml-2">({objectives.length}/5)</span>
+          <h2 className="font-semibold text-ink mb-4">
+            Objetivos de aprendizaje
+            <span className="text-muted font-normal text-sm ml-2">({objectives.length}/5)</span>
           </h2>
 
           {objectives.length > 0 && (
             <div className="space-y-2 mb-4">
               {objectives.map((obj, i) => (
-                <div key={i} className="flex items-center gap-2 bg-slate-800 rounded-lg px-4 py-2.5">
-                  <span className="text-primary-400 font-bold text-sm w-5">{i + 1}.</span>
-                  <span className="text-slate-300 text-sm flex-1">{obj}</span>
+                <div key={i} className="flex items-center gap-2 bg-slate-50 border border-slate-100 rounded-lg px-4 py-2.5">
+                  <span className="text-accent font-bold text-sm w-5">{i + 1}.</span>
+                  <span className="text-body text-sm flex-1">{obj}</span>
                   <button
                     type="button"
                     onClick={() => removeObjective(i)}
-                    className="text-slate-600 hover:text-red-400 transition-colors"
+                    className="text-muted hover:text-red-400 transition-colors"
                   >
-                    ✕
+                    <XMarkIcon className="w-4 h-4" />
                   </button>
                 </div>
               ))}
@@ -162,7 +166,7 @@ export function NewPathPage() {
                 className="btn-secondary px-4"
                 disabled={!objectiveInput.trim()}
               >
-                + Agregar
+                <PlusIcon className="w-4 h-4" /> Agregar
               </button>
             </div>
           )}
@@ -170,8 +174,8 @@ export function NewPathPage() {
 
         {/* ── Tiempo ── */}
         <div className="card">
-          <h2 className="font-semibold text-slate-100 mb-4">
-            ⏱ Tiempo disponible: <span className="text-primary-400">{timeAvailable} horas</span>
+          <h2 className="font-semibold text-ink mb-4">
+            Tiempo disponible: <span className="text-accent">{timeAvailable} horas</span>
           </h2>
           <input
             type="range"
@@ -180,9 +184,9 @@ export function NewPathPage() {
             step={1}
             value={timeAvailable}
             onChange={e => setTimeAvailable(Number(e.target.value))}
-            className="w-full accent-primary-500"
+            className="w-full accent-[#0369A1]"
           />
-          <div className="flex justify-between text-xs text-slate-500 mt-2">
+          <div className="flex justify-between text-xs text-muted mt-2">
             <span>2h (intensivo)</span>
             <span>50h (completo)</span>
             <span>100h (profundo)</span>
@@ -191,20 +195,20 @@ export function NewPathPage() {
 
         {/* ── Formato ── */}
         <div className="card">
-          <h2 className="font-semibold text-slate-100 mb-4">📚 Formato de aprendizaje preferido</h2>
+          <h2 className="font-semibold text-ink mb-4">Formato de aprendizaje preferido</h2>
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
             {FORMATS.map(f => (
               <button
                 key={f.value}
                 type="button"
                 onClick={() => setFormat(f.value)}
-                className={`p-3 rounded-xl border text-center transition-all ${
+                className={`choice text-center p-3 ${
                   format === f.value
-                    ? 'border-primary-500 bg-primary-900/30 text-primary-300'
-                    : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600'
+                    ? 'choice-active'
+                    : ''
                 }`}
               >
-                <div className="text-2xl mb-1">{f.icon}</div>
+                <f.icon className="w-6 h-6 mx-auto mb-1" />
                 <div className="text-xs font-medium">{f.label}</div>
               </button>
             ))}
@@ -213,10 +217,10 @@ export function NewPathPage() {
 
         {/* ── Necesidades especiales (opcional) ── */}
         <div className="card">
-          <h2 className="font-semibold text-slate-100 mb-1">
-            🌟 Necesidades especiales <span className="text-slate-500 font-normal">(opcional)</span>
+          <h2 className="font-semibold text-ink mb-1">
+            Necesidades especiales <span className="text-muted font-normal">(opcional)</span>
           </h2>
-          <p className="text-slate-500 text-xs mb-4">
+          <p className="text-muted text-xs mb-4">
             Dislexia, ritmo lento, enfoque visual, idioma preferido, etc.
           </p>
           <textarea
@@ -240,13 +244,13 @@ export function NewPathPage() {
               Generando tu ruta personalizada...
             </span>
           ) : (
-            '🚀 Generar ruta de aprendizaje'
+            <><SparklesIcon className="w-5 h-5" /> Generar ruta de aprendizaje</>
           )}
         </button>
 
         {generating && (
-          <div className="text-center text-sm text-slate-500">
-            ⏳ La IA está diseñando tu ruta. Esto puede tomar 15-30 segundos.
+          <div className="text-center text-sm text-muted">
+            La IA está diseñando tu ruta. Esto puede tomar 15-30 segundos.
           </div>
         )}
       </form>

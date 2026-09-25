@@ -15,10 +15,12 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           duration: 4000,
           style: {
             borderRadius: '10px',
-            background: '#1e293b',
-            color: '#f1f5f9',
+            background: '#ffffff',
+            color: '#1E293B',
+            border: '1px solid #F1F5F9',
+            fontSize: '14px',
           },
-          success: { iconTheme: { primary: '#22c55e', secondary: '#fff' } },
+          success: { iconTheme: { primary: '#10B981', secondary: '#fff' } },
           error:   { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
         }}
       />
