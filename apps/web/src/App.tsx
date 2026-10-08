@@ -7,6 +7,8 @@ import { DashboardPage }  from './pages/DashboardPage';
 import { NewPathPage }    from './pages/NewPathPage';
 import { PathDetailPage } from './pages/PathDetailPage';
 import { ProfilePage }    from './pages/ProfilePage';
+import { HistoryPage }    from './pages/HistoryPage';
+import { ActivePathPage } from './pages/ActivePathPage';
 import { Layout }         from './components/Layout/Layout';
 
 // Guard: ruta protegida
@@ -32,7 +34,9 @@ export default function App() {
       {/* Rutas protegidas */}
       <Route element={<PrivateRoute><Layout /></PrivateRoute>}>
         <Route path="/dashboard"    element={<DashboardPage />} />
+        <Route path="/history"      element={<HistoryPage />} />
         <Route path="/paths/new"    element={<NewPathPage />} />
+        <Route path="/paths/active" element={<ActivePathPage />} />
         <Route path="/paths/:id"    element={<PathDetailPage />} />
         <Route path="/profile"      element={<ProfilePage />} />
       </Route>

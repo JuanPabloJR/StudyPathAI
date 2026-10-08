@@ -39,3 +39,6 @@ coverage/
 # Temporal
 *.tmp
 *.temp
+
+Tesis
+*.stackdump

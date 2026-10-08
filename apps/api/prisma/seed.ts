@@ -2,14 +2,17 @@
  * Seed: Poblar la base de conocimiento con fuentes educativas verificadas.
  * Ejecutar: npx ts-node prisma/seed.ts
  *
- * Usa Google Gemini para embeddings (text-embedding-004, 768 dims, GRATIS)
+ * Usa Google Gemini para embeddings (EMBEDDING_MODEL, 768 dims, GRATIS)
  * API key: https://aistudio.google.com/app/apikey
+ *
+ * Es idempotente: reemplaza los chunks de cada fuente en cada ejecución.
+ * Vuelve a ejecutarlo si cambias EMBEDDING_MODEL: consulta y documentos
+ * deben usar el mismo modelo.
  */
 import { PrismaClient } from '@prisma/client';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { embedText } from '../src/rag/embeddings';
 
 const prisma = new PrismaClient();
-const genAI  = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || '');
 
 // ─── Fuentes de conocimiento verificadas ─────────────────────────────────────
 const KNOWLEDGE_SOURCES = [
@@ -207,9 +210,11 @@ const KNOWLEDGE_SOURCES = [
 
 // ─── Función para obtener embeddings con Gemini ───────────────────────────────
 async function getEmbedding(text: string): Promise<number[]> {
-  const model  = genAI.getGenerativeModel({ model: 'text-embedding-004' });
-  const result = await model.embedContent(text.slice(0, 8000));
-  return result.embedding.values;  // 768 dimensiones
+  return embedText(text, {
+    apiKey:   process.env.GOOGLE_AI_API_KEY || '',
+    model:    process.env.EMBEDDING_MODEL,
+    taskType: 'RETRIEVAL_DOCUMENT',
+  });
 }
 
 // ─── Función principal de seed ────────────────────────────────────────────────
@@ -243,16 +248,21 @@ async function main() {
 
     console.log(`📚 Fuente: ${source.title}`);
 
+    // Reemplazar chunks previos (evita duplicados y embeddings de otro modelo)
+    await prisma.knowledgeChunk.deleteMany({ where: { sourceId: source.id } });
+
     // Procesar cada chunk
     for (const chunk of chunks) {
       console.log(`  → Generando embedding para chunk: ${(chunk.content.slice(0, 60))}...`);
 
-      let embedding: number[];
+      // Sin embedding se guarda NULL: la búsqueda vectorial ignora ese chunk.
+      // (Un vector cero produce similitud NaN en pgvector.)
+      let embedding: number[] | null;
       try {
         embedding = await getEmbedding(chunk.content);
-      } catch (error) {
-        console.warn(`  ⚠️ Error generando embedding, usando vector cero (demo mode)`);
-        embedding = new Array(768).fill(0);
+      } catch (error: any) {
+        console.warn(`  ⚠️ Error generando embedding (${error?.message ?? error}), se guarda sin embedding`);
+        embedding = null;
       }
 
       // Insertar chunk con embedding usando SQL raw (pgvector no es soportado directamente por Prisma)
@@ -263,7 +273,7 @@ async function main() {
           ${source.id},
           ${chunk.content},
           ${JSON.stringify(chunk.metadata)}::jsonb,
-          ${`[${embedding.join(',')}]`}::vector,
+          ${embedding ? `[${embedding.join(',')}]` : null}::vector,
           NOW()
         )
         ON CONFLICT DO NOTHING

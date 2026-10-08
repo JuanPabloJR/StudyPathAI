@@ -1,211 +1,222 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import toast from 'react-hot-toast';
-import { useAuthStore } from '../store/auth.store';
+import {
+  ChartBarIcon,
+  ClockIcon,
+  CheckCircleIcon,
+  BookOpenIcon,
+  CodeBracketIcon,
+  QuestionMarkCircleIcon,
+  ChatBubbleLeftRightIcon,
+  WrenchScrewdriverIcon,
+  SparklesIcon,
+} from '@heroicons/react/24/outline';
 import { usePathsStore } from '../store/paths.store';
-import { LEVEL_LABELS, FORMAT_LABELS } from '../types';
+import { pathsApi } from '../api/client';
+import type { ActivityType, LearningPath } from '../types';
+import { TimeComparisonChart } from '../components/charts/TimeComparisonChart';
 
-function StatCard({ icon, label, value, color }: any) {
+const fmtHours = (min: number) => {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return h > 0 ? `${h}h${m ? ` ${m}m` : ''}` : `${m}m`;
+};
+
+const ACTIVITY_ICON: Record<ActivityType, typeof BookOpenIcon> = {
+  READING:    BookOpenIcon,
+  PRACTICE:   CodeBracketIcon,
+  PROJECT:    WrenchScrewdriverIcon,
+  QUIZ:       QuestionMarkCircleIcon,
+  EXERCISE:   CodeBracketIcon,
+  DISCUSSION: ChatBubbleLeftRightIcon,
+};
+
+function MetricCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
     <div className="card">
-      <div className="flex items-center gap-4">
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${color}`}>
-          {icon}
-        </div>
-        <div>
-          <p className="text-slate-400 text-sm">{label}</p>
-          <p className="text-2xl font-bold text-slate-100">{value}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PathCard({ path }: { path: any }) {
-  const percent    = path.progress?.percent ?? 0;
-  const isComplete = path.status === 'COMPLETED';
-
-  return (
-    <Link to={`/paths/${path.id}`} className="card hover:border-slate-700 transition-all hover:shadow-lg block">
-      {/* Header */}
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex-1">
-          <h3 className="font-semibold text-slate-100 leading-tight">{path.title}</h3>
-          <p className="text-slate-500 text-sm mt-1">{path.topic}</p>
-        </div>
-        <span className={`badge ml-3 flex-shrink-0 ${
-          isComplete               ? 'badge-green'  :
-          path.status === 'ACTIVE' ? 'badge-blue'   :
-                                     'badge-yellow'
-        }`}>
-          {isComplete ? '✅ Completado' : path.status === 'ACTIVE' ? '📚 Activo' : '⏳'}
-        </span>
-      </div>
-
-      {/* Tags */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        <span className="badge badge-purple">{LEVEL_LABELS[path.level as keyof typeof LEVEL_LABELS]}</span>
-        <span className="badge badge-yellow">{FORMAT_LABELS[path.format as keyof typeof FORMAT_LABELS]}</span>
-        <span className="badge bg-slate-800 text-slate-400 border border-slate-700">
-          ⏱ {path.estimatedHours}h
-        </span>
-      </div>
-
-      {/* Barra de progreso */}
-      <div>
-        <div className="flex justify-between text-xs text-slate-500 mb-2">
-          <span>{path.progress?.completedModules ?? 0} / {path.progress?.totalModules ?? 0} módulos</span>
-          <span className="font-medium text-slate-300">{percent}%</span>
-        </div>
-        <div className="w-full bg-slate-800 rounded-full h-2">
-          <div
-            className={`h-2 rounded-full transition-all duration-500 ${
-              isComplete ? 'bg-green-500' : 'bg-primary-500'
-            }`}
-            style={{ width: `${percent}%` }}
-          />
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-// Tarjeta para rutas que fallaron (ARCHIVED)
-function FailedPathCard({ path, onDelete }: { path: any; onDelete: (id: string) => void }) {
-  return (
-    <div className="card border-red-900/40 bg-red-950/10">
-      <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-red-400 text-sm">⚠️</span>
-            <h3 className="font-medium text-slate-300 text-sm truncate">{path.topic}</h3>
-          </div>
-          <p className="text-slate-500 text-xs">Generación fallida — puedes eliminarla</p>
-          <div className="flex flex-wrap gap-2 mt-2">
-            <span className="badge badge-purple text-xs">{LEVEL_LABELS[path.level as keyof typeof LEVEL_LABELS]}</span>
-            <span className="badge bg-red-900/40 text-red-400 border border-red-800/50 text-xs">Error</span>
-          </div>
-        </div>
-        <button
-          onClick={() => onDelete(path.id)}
-          className="ml-3 flex-shrink-0 text-slate-600 hover:text-red-400 hover:bg-red-900/20 px-3 py-2 rounded-lg transition-all text-sm"
-          title="Eliminar ruta fallida"
-        >
-          🗑️ Eliminar
-        </button>
-      </div>
+      <p className="eyebrow mb-2">{label}</p>
+      <p className="text-2xl font-bold text-ink">
+        {value}{' '}
+        {hint && <span className="text-xs text-success font-normal">{hint}</span>}
+      </p>
     </div>
   );
 }
 
 export function DashboardPage() {
-  const { user } = useAuthStore();
-  const { paths, stats, loading, fetchPaths, fetchStats, deletePath } = usePathsStore();
+  const { paths, stats, loading, fetchPaths, fetchStats } = usePathsStore();
+  const [activePath, setActivePath] = useState<LearningPath | null>(null);
 
   useEffect(() => {
     fetchPaths();
     fetchStats();
   }, []);
 
-  const activePaths    = paths.filter(p => p.status === 'ACTIVE');
-  const completedPaths = paths.filter(p => p.status === 'COMPLETED');
-  const failedPaths    = paths.filter(p => p.status === 'ARCHIVED');
-  const visiblePaths   = [...activePaths, ...completedPaths];
+  // Ruta activa = la ACTIVE más reciente (la lista viene ordenada por fecha desc)
+  const activeSummary = paths.find((p) => p.status === 'ACTIVE');
 
-  const handleDeleteFailed = async (id: string) => {
-    if (!confirm('¿Eliminar esta ruta fallida?')) return;
-    await deletePath(id);
-    toast.success('Ruta eliminada');
-  };
+  useEffect(() => {
+    if (!activeSummary) { setActivePath(null); return; }
+    pathsApi.get(activeSummary.id)
+      .then((res) => setActivePath(res.data.data))
+      .catch(() => setActivePath(null));
+  }, [activeSummary?.id]);
+
+  const visible   = paths.filter((p) => p.status === 'ACTIVE' || p.status === 'COMPLETED');
+  const active    = paths.filter((p) => p.status === 'ACTIVE');
+  const completed = paths.filter((p) => p.status === 'COMPLETED');
+  const modulesDone = visible.reduce((acc, p) => acc + (p.progress?.completedModules ?? 0), 0);
+  const avgPercent  = active.length
+    ? Math.round(active.reduce((acc, p) => acc + (p.progress?.percent ?? 0), 0) / active.length)
+    : 0;
+
+  const modules = activePath?.modules ?? [];
+
+  const chartData = useMemo(
+    () => modules.map((m) => ({
+      label:     `M${m.order}`,
+      title:     m.title,
+      estimated: m.estimatedTime,
+      real:      m.progress?.timeSpent ?? 0,
+    })),
+    [activePath?.id, activePath?.updatedAt],
+  );
+
+  // Próximas actividades: las del primer módulo sin completar
+  const nextModule = modules.find((m) => !m.progress?.completed);
+  const nextActivities = nextModule?.activities.slice(0, 3) ?? [];
+
+  if (loading && paths.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-32">
+        <div className="text-center">
+          <div className="w-10 h-10 spinner mx-auto mb-4" />
+          <p className="text-body">Cargando tu progreso...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in">
       {/* ─── Header ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between mb-8">
+      <header className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">
-            Hola, {user?.name?.split(' ')[0]} 👋
-          </h1>
-          <p className="text-slate-400 mt-1">Tu panel de aprendizaje personalizado</p>
-        </div>
-        <Link to="/paths/new" className="btn-primary">
-          ✨ Nueva Ruta
-        </Link>
-      </div>
-
-      {/* ─── Stats ───────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard icon="📚" label="Total de rutas"    value={visiblePaths.length} color="bg-blue-900/40" />
-        <StatCard icon="🎯" label="Rutas activas"     value={activePaths.length}  color="bg-primary-900/40" />
-        <StatCard icon="✅" label="Completadas"        value={completedPaths.length} color="bg-green-900/40" />
-        <StatCard
-          icon="⏱"
-          label="Horas de estudio"
-          value={`${Math.round((stats?.totalTimeSpentMin || 0) / 60)}h`}
-          color="bg-purple-900/40"
-        />
-      </div>
-
-      {/* ─── Contenido ───────────────────────────────────────────────────── */}
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="text-center">
-            <div className="w-10 h-10 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-slate-400">Cargando tus rutas...</p>
-          </div>
-        </div>
-      ) : visiblePaths.length === 0 && failedPaths.length === 0 ? (
-        /* Estado vacío real */
-        <div className="card text-center py-16">
-          <div className="text-6xl mb-4">🗺️</div>
-          <h2 className="text-xl font-bold text-slate-200 mb-2">Aún no tienes rutas</h2>
-          <p className="text-slate-400 mb-6">
-            Crea tu primera ruta de aprendizaje personalizada con IA
+          <h1 className="text-3xl font-bold text-ink mb-2">Panel de Progreso Académico</h1>
+          <p className="text-body leading-relaxed">
+            Visualiza tu avance global y el desempeño en tus rutas de aprendizaje.
           </p>
-          <Link to="/paths/new" className="btn-primary">
-            ✨ Crear mi primera ruta
+        </div>
+        {activeSummary && (
+          <Link
+            to={`/paths/${activeSummary.id}`}
+            className="flex items-center gap-2 text-sm bg-white border border-gray-100 px-4 py-2 rounded-lg shadow-sm hover:border-slate-200 max-w-xs"
+          >
+            <span className="text-muted shrink-0">Ruta actual:</span>
+            <span className="font-bold text-ink truncate">{activeSummary.topic}</span>
           </Link>
+        )}
+      </header>
+
+      {/* ─── Métricas ───────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+        <MetricCard label="Tiempo total"        value={fmtHours(stats?.totalTimeSpentMin ?? 0)} />
+        <MetricCard label="Módulos completados" value={modulesDone} />
+        <MetricCard
+          label="Rutas activas"
+          value={active.length}
+          hint={completed.length ? `${completed.length} completada${completed.length > 1 ? 's' : ''}` : undefined}
+        />
+        <MetricCard label="Avance promedio" value={`${avgPercent}%`} />
+      </div>
+
+      {visible.length === 0 ? (
+        <div className="card text-center py-16">
+          <SparklesIcon className="w-12 h-12 text-accent mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-ink mb-2">Aún no tienes rutas</h2>
+          <p className="text-body mb-6">Crea tu primera ruta de aprendizaje personalizada con IA.</p>
+          <Link to="/paths/new" className="btn-primary">Crear mi primera ruta</Link>
         </div>
       ) : (
-        <div>
-          {/* Rutas activas */}
-          {activePaths.length > 0 && (
-            <section className="mb-8">
-              <h2 className="text-lg font-semibold text-slate-200 mb-4">
-                📚 Rutas en progreso ({activePaths.length})
-              </h2>
-              <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {activePaths.map(p => <PathCard key={p.id} path={p} />)}
+        <>
+          {/* ─── Gráficas ─────────────────────────────────────────────────── */}
+          {activePath && modules.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
+              <div className="card lg:min-h-[350px]">
+                <h3 className="section-title mb-6">
+                  <ChartBarIcon className="w-4 h-4 text-accent" /> Avance por Módulo (Ruta Activa)
+                </h3>
+                <ul className="space-y-3">
+                  {modules.map((m) => {
+                    const done = m.progress?.completed ?? false;
+                    return (
+                      <li key={m.id} className="flex items-center gap-3">
+                        <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                          done ? 'bg-success/10 text-success' : 'bg-slate-100 text-body'
+                        }`}>
+                          {done ? <CheckCircleIcon className="w-4 h-4" /> : m.order}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between gap-2 text-sm">
+                            <span className={`truncate ${done ? 'text-body' : 'text-ink font-medium'}`}>{m.title}</span>
+                            <span className="text-xs text-muted shrink-0">{done ? 'Completado' : fmtHours(m.estimatedTime)}</span>
+                          </div>
+                          <div className="w-full bg-slate-100 rounded-full h-1.5 mt-1.5">
+                            <div
+                              className="h-1.5 rounded-full bg-accent transition-all duration-500"
+                              style={{ width: done ? '100%' : '0%' }}
+                            />
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
-            </section>
+
+              <div className="card lg:min-h-[350px]">
+                <h3 className="section-title mb-4">
+                  <ClockIcon className="w-4 h-4 text-accent" /> Tiempo Real vs. Estimado
+                </h3>
+                <TimeComparisonChart data={chartData} />
+              </div>
+            </div>
           )}
 
-          {/* Rutas completadas */}
-          {completedPaths.length > 0 && (
-            <section className="mb-8">
-              <h2 className="text-lg font-semibold text-slate-200 mb-4">
-                ✅ Completadas ({completedPaths.length})
-              </h2>
-              <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {completedPaths.map(p => <PathCard key={p.id} path={p} />)}
+          {/* ─── Próximas actividades ─────────────────────────────────────── */}
+          {activePath && nextModule && nextActivities.length > 0 && (
+            <div className="card">
+              <h3 className="text-sm font-bold text-ink mb-6 uppercase tracking-wider">
+                Próximas Actividades Recomendadas
+              </h3>
+              <div className="space-y-4">
+                {nextActivities.map((a, i) => {
+                  const Icon = ACTIVITY_ICON[a.type] ?? BookOpenIcon;
+                  return (
+                    <div key={a.id} className="flex items-center justify-between gap-4 p-4 bg-slate-50 rounded-lg border border-slate-100">
+                      <div className="flex items-center gap-4 min-w-0">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                          i === 0 ? 'bg-accent/10 text-accent' : 'bg-success/10 text-success'
+                        }`}>
+                          <Icon className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-ink truncate">{a.title}</p>
+                          <p className="text-[11px] text-body truncate">
+                            Módulo {nextModule.order}: {nextModule.title} • {a.durationMin} min est.
+                          </p>
+                        </div>
+                      </div>
+                      <Link to={`/paths/${activePath.id}`} className="btn-primary text-xs px-4 py-2 shrink-0">
+                        Iniciar
+                      </Link>
+                    </div>
+                  );
+                })}
               </div>
-            </section>
+            </div>
           )}
-
-          {/* Rutas fallidas — con botón de eliminar */}
-          {failedPaths.length > 0 && (
-            <section>
-              <h2 className="text-lg font-semibold text-slate-400 mb-4">
-                ⚠️ Generación fallida ({failedPaths.length})
-              </h2>
-              <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
-                {failedPaths.map(p => (
-                  <FailedPathCard key={p.id} path={p} onDelete={handleDeleteFailed} />
-                ))}
-              </div>
-            </section>
-          )}
-        </div>
+        </>
       )}
     </div>
   );

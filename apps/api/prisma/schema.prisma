@@ -33,7 +33,8 @@ enum PathStatus {
   GENERATING
   ACTIVE
   COMPLETED
-  ARCHIVED
+  ARCHIVED // versión reemplazada al regenerar
+  FAILED   // la generación con el LLM falló
 }
 
 enum ResourceType {
@@ -203,7 +204,7 @@ model KnowledgeChunk {
   sourceId   String                      @map("source_id")
   content    String                      @db.Text
   metadata   Json                        // { topic, level, format, source_url, author }
-  embedding  Unsupported("vector(768)")?  // pgvector — Gemini text-embedding-004 = 768 dims
+  embedding  Unsupported("vector(768)")?  // pgvector — Gemini gemini-embedding-001 con outputDimensionality 768
   createdAt  DateTime                    @default(now()) @map("created_at")
 
   source KnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)

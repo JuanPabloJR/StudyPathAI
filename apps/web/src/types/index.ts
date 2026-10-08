@@ -2,7 +2,7 @@
 
 export type KnowledgeLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'EXPERT';
 export type LearningFormat  = 'VIDEO' | 'TEXT' | 'INTERACTIVE' | 'MIXED' | 'PROJECT_BASED';
-export type PathStatus      = 'GENERATING' | 'ACTIVE' | 'COMPLETED' | 'ARCHIVED';
+export type PathStatus      = 'GENERATING' | 'ACTIVE' | 'COMPLETED' | 'ARCHIVED' | 'FAILED';
 export type ResourceType    = 'VIDEO' | 'ARTICLE' | 'BOOK' | 'COURSE' | 'EXERCISE' | 'DOCUMENTATION' | 'TUTORIAL';
 export type ActivityType    = 'READING' | 'PRACTICE' | 'PROJECT' | 'QUIZ' | 'EXERCISE' | 'DISCUSSION';
 

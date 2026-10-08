@@ -4,37 +4,34 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: {
-          50:  '#eff6ff',
-          100: '#dbeafe',
-          200: '#bfdbfe',
-          300: '#93c5fd',
-          400: '#60a5fa',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-          800: '#1e40af',
-          900: '#1e3a8a',
-        },
+        // Tokens del diseño "Panel de Progreso" (UX Pilot)
+        ink:     '#1E293B', // texto principal, sidebar, botones primarios
+        body:    '#475569', // texto secundario
+        muted:   '#94A3B8', // etiquetas y texto terciario
+        surface: '#F8FAFC', // fondo de página
         accent: {
-          50:  '#f0fdf4',
-          500: '#22c55e',
-          600: '#16a34a',
+          DEFAULT: '#0369A1',
+          50:  '#F0F9FF',
+          100: '#E0F2FE',
+          200: '#BAE6FD',
+          600: '#0284C7',
+          700: '#0369A1',
+          800: '#075985',
         },
+        success:  '#10B981',
+        estimate: '#7C3AED', // serie "Estimado" en gráficas (validada contra accent)
+      },
+      fontFamily: {
+        sans:    ['"Open Sans"', 'system-ui', 'sans-serif'],
+        heading: ['Montserrat', 'system-ui', 'sans-serif'],
       },
       animation: {
         'fade-in': 'fadeIn 0.3s ease-in-out',
-        'slide-up': 'slideUp 0.4s ease-out',
-        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
       },
       keyframes: {
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
-        },
-        slideUp: {
-          '0%': { transform: 'translateY(20px)', opacity: '0' },
-          '100%': { transform: 'translateY(0)', opacity: '1' },
         },
       },
     },
