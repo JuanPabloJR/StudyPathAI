@@ -1,20 +1,31 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ['error', 'warn', 'log'],
   });
 
+  // Detrás del proxy de Render: usar la IP real del cliente (X-Forwarded-For)
+  // para que el rate limiting no trate a todos los usuarios como una sola IP.
+  app.set('trust proxy', 1);
+
   // ─── Seguridad ─────────────────────────────────────────────────────────────
+  // CORS_ORIGIN admite varios orígenes separados por coma
+  const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+
   app.use(helmet());
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: corsOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
@@ -59,7 +70,7 @@ async function bootstrap() {
     console.log(`📚 Swagger disponible en: http://localhost:${process.env.PORT || 3001}/api/docs`);
   }
 
-  // ─── Health check público (Railway) ──────────────────────────────────────
+  // ─── Health check público (Render) ───────────────────────────────────────
   const httpAdapter = app.getHttpAdapter();
   httpAdapter.get('/health', (_req: any, res: any) => res.status(200).json({ status: 'ok' }));
 

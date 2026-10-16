@@ -8,7 +8,7 @@ Tesis (Universidad de Colima, 2026). Genera rutas de aprendizaje personalizadas 
 - LLM: `groq-sdk`, modelo `llama-3.3-70b-versatile`, `response_format: json_object`.
 - Embeddings: Gemini `gemini-embedding-001` a 768 dims vía REST (`src/rag/embeddings.ts`), compartido por `prisma/seed.ts` (documentos) y `RagService.embedQuery` (consultas). Sin `GOOGLE_AI_API_KEY` la ruta se genera sin contexto. Nunca usar vectores cero: pgvector da similitud NaN.
 - Auth: JWT (passport-jwt) + bcrypt (12 rounds). Token en `localStorage` en el frontend.
-- Solo entorno local. `apps/api/Dockerfile` y `apps/api/railway.json` quedan de un deploy anterior en Railway que ya no se usa.
+- Despliegue gratuito: frontend en Vercel (`apps/web/vercel.json`), API en Render con Docker (`render.yaml` + `apps/api/Dockerfile`), base de datos en Neon. Pasos en `README.md`. Desarrollo sigue siendo local con Docker Compose.
 
 ## Comandos
 Backend (`apps/api`):
