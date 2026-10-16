@@ -58,7 +58,7 @@ y adaptados al perfil de cada usuario.
 │  Progress        │          │                          │
 │  KnowledgeChunks │          │  ┌────────────────────┐  │
 │  (vector store)  │          │  │   GROQ             │  │
-└──────────────────┘          │  │   llama-3.3-70b    │  │
+└──────────────────┘          │  │   gpt-oss-120b     │  │
                               │  └────────────────────┘  │
                               └──────────────────────────┘
 ```
@@ -143,7 +143,7 @@ User ──── UserProfile
 | ORM | Prisma | 5.x |
 | Base de datos | PostgreSQL + pgvector | 16.x |
 | Auth | JWT + bcrypt | — |
-| LLM | GROQ llama-3.3-70b-versatile | — |
+| LLM | GROQ openai/gpt-oss-120b | — |
 | Embeddings | Google Gemini gemini-embedding-001 (768d, seed + consultas) | — |
 | Contenedor | Docker + Docker Compose | — |
 

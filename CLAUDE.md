@@ -5,7 +5,7 @@ Tesis (Universidad de Colima, 2026). Genera rutas de aprendizaje personalizadas 
 ## Stack
 - Monorepo sin workspaces: `apps/api` (NestJS 10 + Prisma 5) y `apps/web` (React 18 + Vite 5 + Tailwind + Zustand). Cada app tiene su propio `package.json` y `package-lock.json`.
 - PostgreSQL 16 + pgvector (imagen `pgvector/pgvector:pg16`).
-- LLM: `groq-sdk`, modelo `llama-3.3-70b-versatile`, `response_format: json_object`.
+- LLM: `groq-sdk`, modelo `openai/gpt-oss-120b`, `response_format: json_object`.
 - Embeddings: Gemini `gemini-embedding-001` a 768 dims vía REST (`src/rag/embeddings.ts`), compartido por `prisma/seed.ts` (documentos) y `RagService.embedQuery` (consultas). Sin `GOOGLE_AI_API_KEY` la ruta se genera sin contexto. Nunca usar vectores cero: pgvector da similitud NaN.
 - Auth: JWT (passport-jwt) + bcrypt (12 rounds). Token en `localStorage` en el frontend.
 - Despliegue gratuito: frontend en Vercel (`apps/web/vercel.json`), API en Render con Docker (`render.yaml` + `apps/api/Dockerfile`), base de datos en Neon. Pasos en `README.md`. Desarrollo sigue siendo local con Docker Compose.

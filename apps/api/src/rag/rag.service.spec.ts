@@ -93,7 +93,7 @@ const mockConfig = { get: jest.fn((key: string) => configValues[key]) };
 
 const baseConfig = {
   GROQ_API_KEY:       'test-groq-key',
-  GROQ_MODEL:         'llama-3.3-70b-versatile',
+  GROQ_MODEL:         'openai/gpt-oss-120b',
   GOOGLE_AI_API_KEY:  'test-google-key',
   EMBEDDING_MODEL:    'gemini-embedding-001',
   RAG_MIN_SIMILARITY: '0.6',
@@ -212,7 +212,7 @@ describe('RagService', () => {
       expect(result.modules[0].resources).toHaveLength(1);
       expect(result.modules[0].activities).toHaveLength(1);
       expect(result.ragSources).toHaveLength(2);
-      expect(result.generationMeta.model).toBe('llama-3.3-70b-versatile');
+      expect(result.generationMeta.model).toBe('openai/gpt-oss-120b');
       expect(result.generationMeta.chunksRetrieved).toBe(2);
     });
 

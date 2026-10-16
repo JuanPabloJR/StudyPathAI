@@ -77,7 +77,7 @@ const mockRag = {
       },
     ],
     ragSources: [],
-    generationMeta: { model: 'llama-3.3-70b-versatile', chunksRetrieved: 5, generationMs: 3000 },
+    generationMeta: { model: 'openai/gpt-oss-120b', chunksRetrieved: 5, generationMs: 3000 },
   }),
 };
 

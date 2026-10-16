@@ -253,12 +253,12 @@ Genera la ruta de aprendizaje completa en español. Responde SOLO con el JSON.`;
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // PASO 4 — Llamar a Groq (Llama 3.3 70B)
+  // PASO 4 — Llamar a Groq (GPT-OSS 120B)
   // ══════════════════════════════════════════════════════════════════════════
 
   async generateLearningPath(req: LearningPathRequest): Promise<GeneratedLearningPath> {
     const t0    = Date.now();
-    const model = this.config.get<string>('GROQ_MODEL') || 'llama-3.3-70b-versatile';
+    const model = this.config.get<string>('GROQ_MODEL') || 'openai/gpt-oss-120b';
     this.logger.log(`🚀 [Groq/${model}] Generando ruta: "${req.topic}" · ${req.level}`);
 
     // 1. Embedding de la consulta

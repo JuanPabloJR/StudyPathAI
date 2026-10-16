@@ -8,7 +8,7 @@
 
 ## ¿Qué es StudyPath AI?
 
-StudyPath AI combina **Retrieval-Augmented Generation (RAG)** con el modelo de lenguaje **GROQ (llama-3.3-70b-versatile)** para generar rutas de aprendizaje estructuradas, progresivas y adaptadas al perfil de cada estudiante.
+StudyPath AI combina **Retrieval-Augmented Generation (RAG)** con el modelo de lenguaje **GROQ (openai/gpt-oss-120b)** para generar rutas de aprendizaje estructuradas, progresivas y adaptadas al perfil de cada estudiante.
 
 El usuario ingresa su tema, nivel, objetivos y tiempo disponible; el sistema recupera contenido educativo verificado desde su base de conocimiento y genera un plan con módulos, recursos, actividades y tiempos estimados.
 
@@ -23,7 +23,7 @@ El usuario ingresa su tema, nivel, objetivos y tiempo disponible; el sistema rec
 | Backend | NestJS 10 + TypeScript |
 | ORM | Prisma 5 |
 | Base de datos | PostgreSQL 16 + pgvector |
-| LLM | GROQ llama-3.3-70b-versatile |
+| LLM | GROQ openai/gpt-oss-120b |
 | Embeddings | Google Gemini gemini-embedding-001 (768d, seed + consultas) |
 | Auth | JWT + bcrypt |
 | Contenedores | Docker + Docker Compose |
@@ -129,7 +129,7 @@ npm run dev           # http://localhost:5173
    - System: instrucciones de experto educativo + formato JSON
    - User:   perfil del estudiante + contexto recuperado (chunks)
         ↓
-5. GROQ API (llama-3.3-70b-versatile) genera la ruta estructurada en JSON
+5. GROQ API (openai/gpt-oss-120b) genera la ruta estructurada en JSON
         ↓
 6. El JSON se parsea y valida
         ↓
