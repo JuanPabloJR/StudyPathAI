@@ -110,12 +110,7 @@ npm install
 npm run dev           # http://localhost:5173
 ```
 
-### Con Docker Compose (producción)
-
-```bash
-cp .env.example .env   # Configurar todas las variables
-docker compose up -d   # Levanta postgres + api + web
-```
+> `docker-compose.yml` solo define PostgreSQL. Para producción ver [Despliegue gratuito](#-despliegue-gratuito-vercel--render--neon).
 
 ---
 
@@ -189,47 +184,50 @@ KnowledgeSource
 | Etapa | Semanas | Contenido |
 |-------|---------|-----------|
 | 1 | 1-2 | Infraestructura: Docker, DB, Auth, Prisma |
-| 2 | 3-4 | Pipeline RAG: embeddings, pgvector, Claude |
+| 2 | 3-4 | Pipeline RAG: embeddings (Gemini), pgvector, Groq |
 | 3 | 5-6 | CRUD rutas, progreso, regeneración |
 | 4 | 7-8 | Frontend completo (React + Tailwind) |
 | 5 | 9-10 | QA, seguridad, despliegue, documentación |
 
 ---
 
-## 🚀 Deploy en Railway (solo el backend)
+## 🚀 Despliegue gratuito (Vercel + Render + Neon)
 
-Railway auto-despliega el backend en cada `git push`.
+| Pieza | Servicio | Plan |
+|-------|----------|------|
+| Frontend (React) | [Vercel](https://vercel.com) | Hobby (gratis) |
+| API (NestJS, Docker) | [Render](https://render.com) | Free web service |
+| PostgreSQL + pgvector | [Neon](https://neon.tech) | Free |
 
-### Pasos
+> Render apaga la API tras ~15 min sin tráfico; la primera petición después tarda 30-60 s en despertar.
 
-1. Crear cuenta en [railway.app](https://railway.app) y conectar tu cuenta de GitHub
-2. **New Project → Deploy from GitHub repo** → seleccionar este repositorio
-3. En la configuración del servicio, cambiar **Root Directory** a `apps/api`
-4. Agregar un servicio de **PostgreSQL** (Railway lo inyecta como `DATABASE_URL` automáticamente)
-5. En **Variables**, agregar:
+### 1. Base de datos (Neon)
 
-```
-GROQ_API_KEY=gsk_...
-GROQ_MODEL=llama-3.3-70b-versatile
-GOOGLE_AI_API_KEY=AIzaSy...     # solo si vas a correr el seed en Railway
-JWT_SECRET=un-secreto-seguro-de-al-menos-32-caracteres
-JWT_EXPIRES_IN=7d
-NODE_ENV=production
-CORS_ORIGIN=https://tu-frontend.vercel.app
-```
+1. Crear proyecto en Neon, región **AWS us-east-2 (Ohio)**.
+2. Copiar la cadena de conexión **sin pooler** (desactivar *Connection pooling*). Debe terminar en `?sslmode=require`.
+3. No hace falta crear la extensión `vector` a mano: la primera migración ejecuta `CREATE EXTENSION IF NOT EXISTS "vector"`.
 
-> `DATABASE_URL` y `PORT` los inyecta Railway automáticamente — no los pongas a mano.
+### 2. API (Render)
 
-6. Railway detecta el `Dockerfile` y construye. En cada `git push` a `main` se redespliega solo.
+1. Render → **New → Blueprint** → seleccionar este repositorio. Render lee `render.yaml`.
+2. Capturar las variables pedidas: `DATABASE_URL` (Neon), `GROQ_API_KEY`, `GOOGLE_AI_API_KEY` y `CORS_ORIGIN` (URL de Vercel; si aún no la tienes, pon un valor temporal y actualízala en el paso 4).
+3. Render construye `apps/api/Dockerfile`. Al arrancar, el contenedor ejecuta `prisma migrate deploy`. En cada `git push` a `main` se redespliega solo.
+4. Verificar: `https://<tu-api>.onrender.com/health` → `{"status":"ok"}`.
 
-### Después del primer deploy
+### 3. Seed de la base de conocimiento (una sola vez)
 
-El seed (base de conocimiento con embeddings de Google) se corre **una sola vez** de forma manual:
+Desde tu máquina, en `apps/api`, apuntando a Neon:
 
 ```bash
-# Desde tu máquina local, con las variables apuntando a la DB de Railway
-DATABASE_URL="postgresql://..." npx ts-node prisma/seed.ts
+DATABASE_URL="postgresql://...neon.tech/neondb?sslmode=require" npm run db:seed
 ```
+
+### 4. Frontend (Vercel)
+
+1. Vercel → **Add New → Project** → importar el repositorio.
+2. **Root Directory**: `apps/web` (Vercel detecta Vite; `vercel.json` agrega el rewrite para las rutas de React Router).
+3. Variable de entorno: `VITE_API_URL=https://<tu-api>.onrender.com/api`.
+4. Deploy. Copiar la URL final (`https://<proyecto>.vercel.app`) a `CORS_ORIGIN` en Render y redesplegar la API.
 
 ---
 

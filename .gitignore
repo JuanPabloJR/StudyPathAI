@@ -13,7 +13,7 @@ build/
 .env.local
 .env.*.local
 
-# Prisma (las migraciones SÍ se suben — Railway las necesita para prisma migrate deploy)
+# Prisma (las migraciones SÍ se suben — el contenedor de Render las aplica para prisma migrate deploy)
 
 # Logs
 logs/
