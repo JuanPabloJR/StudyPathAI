@@ -12,6 +12,15 @@ import { LEVEL_LABELS, FORMAT_LABELS, RESOURCE_TYPE_LABELS, ACTIVITY_TYPE_LABELS
 
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
 
+// Solo se enlazan URLs http(s); el backend ya reemplaza las rotas por una búsqueda
+function isSafeUrl(url: string | null | undefined): url is string {
+  return !!url && /^https?:\/\//i.test(url);
+}
+
+function isSearchUrl(url: string | null | undefined): boolean {
+  return !!url && (url.includes('www.youtube.com/results') || url.includes('www.google.com/search'));
+}
+
 function ProgressBar({ percent }: { percent: number }) {
   return (
     <div className="w-full">
@@ -42,14 +51,38 @@ function ModuleCard({
 }) {
   const { updateProgress } = usePathsStore();
   const isCompleted = module.progress?.completed ?? false;
+  const [saving, setSaving] = useState(false);
 
   const handleToggleComplete = async () => {
-    await updateProgress(pathId, module.id, {
-      completed: !isCompleted,
-      timeSpent: isCompleted ? 0 : module.estimatedTime,
-    });
-    toast.success(isCompleted ? 'Módulo desmarcado' : '¡Módulo completado! ');
+    if (saving) return;
+    setSaving(true);
+    try {
+      await updateProgress(pathId, module.id, {
+        completed: !isCompleted,
+        timeSpent: isCompleted ? 0 : module.estimatedTime,
+      });
+      toast.success(isCompleted ? 'Módulo marcado como pendiente' : '¡Módulo terminado!');
+    } catch {
+      toast.error('No se pudo actualizar el módulo');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const completeButton = (
+    <button
+      onClick={handleToggleComplete}
+      disabled={saving}
+      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-all disabled:opacity-60 ${
+        isCompleted
+          ? 'bg-success border-success text-white hover:bg-success/90'
+          : 'border-slate-300 text-body hover:border-success hover:text-success'
+      }`}
+    >
+      <CheckIcon className="w-3.5 h-3.5" />
+      {isCompleted ? 'Terminado' : 'Marcar como terminado'}
+    </button>
+  );
 
   const resourceTypeIcon: Record<string, typeof BookOpenIcon> = {
     VIDEO: PlayCircleIcon, ARTICLE: DocumentTextIcon, BOOK: BookOpenIcon, COURSE: AcademicCapIcon,
@@ -70,6 +103,9 @@ function ModuleCard({
         {/* Número / Checkmark */}
         <button
           onClick={handleToggleComplete}
+          disabled={saving}
+          aria-label={isCompleted ? 'Marcar módulo como pendiente' : 'Marcar módulo como terminado'}
+          title={isCompleted ? 'Marcar como pendiente' : 'Marcar como terminado'}
           className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-sm border-2 transition-all ${
             isCompleted
               ? 'bg-success border-success text-white'
@@ -96,6 +132,7 @@ function ModuleCard({
             </div>
           </div>
           <p className="text-body text-sm mt-1">{module.objective}</p>
+          <div className="mt-3">{completeButton}</div>
         </div>
       </div>
 
@@ -145,7 +182,7 @@ function ModuleCard({
                     {(() => { const Icon = resourceTypeIcon[r.type] || DocumentTextIcon; return <span className="w-9 h-9 rounded-full bg-accent/10 text-accent flex items-center justify-center flex-shrink-0"><Icon className="w-5 h-5" /></span>; })()}
                     <div className="flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        {r.url ? (
+                        {isSafeUrl(r.url) ? (
                           <a
                             href={r.url}
                             target="_blank"
@@ -158,6 +195,11 @@ function ModuleCard({
                           <span className="font-medium text-ink text-sm">{r.title}</span>
                         )}
                         <span className="badge badge-blue text-xs">{RESOURCE_TYPE_LABELS[r.type]}</span>
+                        {isSearchUrl(r.url) && (
+                          <span className="badge-gray text-xs" title="El enlace original no estaba disponible; se abre una búsqueda del recurso">
+                            Búsqueda
+                          </span>
+                        )}
                         {r.isFree && <span className="badge badge-green text-xs">Gratis</span>}
                       </div>
                       {r.description && (
@@ -175,7 +217,7 @@ function ModuleCard({
 
           {/* Actividades */}
           {module.activities?.length > 0 && (
-            <div>
+            <div className="mb-5">
               <h4 className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">
                 Actividades
               </h4>

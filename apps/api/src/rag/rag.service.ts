@@ -1,19 +1,20 @@
 /**
- * RagService — Pipeline RAG con Groq (Llama 3.3 70B)
+ * RagService — Pipeline RAG con Groq (GPT-OSS 120B)
  *
  * Flujo:
  *  1. Perfil del usuario → texto de consulta
  *  2. Embedding (Gemini) → pgvector cosine search → top-K chunks sobre umbral
  *     (sin embedding disponible → se genera sin contexto recuperado)
- *  3. Prompt con contexto recuperado → Groq Llama 3.3 70B
+ *  3. Prompt con contexto recuperado → Groq GPT-OSS 120B
  *  4. JSON estructurado via response_format json_object
- *  5. Normalizar y guardar en BD
+ *  5. Normalizar, validar enlaces de recursos y guardar en BD
  */
 import { Injectable, Logger, BadGatewayException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Groq from 'groq-sdk';
 import { PrismaService } from '../prisma/prisma.service';
 import { embedText } from './embeddings';
+import { validateResourceLinks } from './resource-links';
 
 // ─── Tipos de la aplicación ───────────────────────────────────────────────────
 
@@ -158,7 +159,8 @@ Generas rutas de aprendizaje estructuradas, progresivas y adaptadas al perfil de
 REGLAS:
 - Basa el contenido PRINCIPALMENTE en el contexto educativo proporcionado.
 - Los módulos van de lo básico a lo avanzado, en orden progresivo.
-- Los recursos deben ser reales (prioriza los del contexto dado).
+- Los recursos deben ser reales (prioriza los del contexto dado). Usa solo URLs que existan con certeza
+  (documentación oficial, páginas principales de cursos o sitios conocidos); si no estás seguro de una URL, pon null.
 - Las actividades deben ser prácticas y medibles.
 - Respeta el tiempo disponible: distribúyelo de forma realista entre módulos.
 - Si hay necesidades especiales, adapta el ritmo y los ejemplos.
@@ -329,6 +331,13 @@ Genera la ruta de aprendizaje completa en español. Responde SOLO con el JSON.`;
         order:       a.order       ?? j + 1,
       })) : [],
     }));
+
+    // 6. Validar enlaces: los rotos o ausentes se reemplazan por una búsqueda
+    if (this.config.get<string>('VALIDATE_RESOURCE_LINKS') !== 'false') {
+      const links = await validateResourceLinks(parsed.modules as GeneratedModule[], req.topic);
+      parsed.modules = links.modules;
+      this.logger.log(`🔗 Enlaces revisados: ${links.checked} · reemplazados por búsqueda: ${links.replaced}`);
+    }
 
     const ms = Date.now() - t0;
     this.logger.log(`✅ Ruta generada en ${ms}ms · ${parsed.modules.length} módulos`);

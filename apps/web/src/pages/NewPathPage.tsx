@@ -174,9 +174,12 @@ export function NewPathPage() {
 
         {/* ── Tiempo ── */}
         <div className="card">
-          <h2 className="font-semibold text-ink mb-4">
-            Tiempo disponible: <span className="text-accent">{timeAvailable} horas</span>
+          <h2 className="font-semibold text-ink mb-1">
+            Duración total del curso: <span className="text-accent">{timeAvailable} horas</span>
           </h2>
+          <p className="text-xs text-muted mb-4">
+            Horas para completar el curso completo (todos los módulos), no por día ni por semana.
+          </p>
           <input
             type="range"
             min={2}

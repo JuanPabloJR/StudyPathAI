@@ -97,6 +97,7 @@ const baseConfig = {
   GOOGLE_AI_API_KEY:  'test-google-key',
   EMBEDDING_MODEL:    'gemini-embedding-001',
   RAG_MIN_SIMILARITY: '0.6',
+  VALIDATE_RESOURCE_LINKS: 'false', // la validación de enlaces se prueba en resource-links.spec.ts
 };
 
 // ─── Suite de tests ───────────────────────────────────────────────────────────
